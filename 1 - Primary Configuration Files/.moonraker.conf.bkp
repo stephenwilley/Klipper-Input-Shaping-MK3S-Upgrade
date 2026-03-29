@@ -1,0 +1,28 @@
+[server]
+host = 0.0.0.0
+port = 7125
+klippy_uds_address = /opt/printer_data/run/klipper.sock
+max_upload_size = 1024
+
+[authorization]
+cors_domains = 
+	*
+trusted_clients = 
+	127.0.0.1
+	192.168.0.0/16
+	10.0.0.0/8
+	172.16.0.0/12
+
+[machine]
+provider = none
+
+[octoprint_compat]
+
+[webcam printer1]
+service = webrtc-go2rtc
+target_fps = 30
+target_fps_idle = 5
+stream_url = http://mini1:1984/stream.html?src=printer&mode=webrtc
+snapshot_url = http://mini1:1984/api/frame.jpeg?src=printer
+aspect_ratio = 16:9
+
