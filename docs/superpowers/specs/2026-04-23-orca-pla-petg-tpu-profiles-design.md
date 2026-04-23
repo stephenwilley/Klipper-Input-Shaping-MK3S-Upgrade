@@ -26,6 +26,18 @@ In their last Orca trial the user observed faster prints but lower visual qualit
 - Per-filament process profiles. The process is material-agnostic; the filament profile carries material-specific behavior.
 - Changing `printer.cfg`. The hardware ceiling stays where it is; the slicer operates conservatively below it for quality.
 
+## Compatibility approach (lesson from the ASA setup)
+
+Every new profile in this spec sets `compatible_printers: ["Stephen 0.4 Klipper CHT"]` explicitly as an array, never relying on `compatible_printers_condition` regexes.
+
+The ASA migration repeatedly produced "profile doesn't appear in dropdown" symptoms because:
+
+1. Some Prusa parents use a `compatible_printers_condition` regex (e.g. `printer_notes=~/.*MK4S.*/`) that the user's `MK4IS`-tagged printer does not match.
+2. An empty `compatible_printers_condition` field is treated by Orca as "always fails" rather than "no restriction".
+3. When the inheritance chain crosses vendors that aren't enabled in the user's Orca install (Custom + OrcaFilamentLibrary only), parent profiles can fail to load silently.
+
+The fix in every case is the same: explicit `compatible_printers` list naming `Stephen 0.4 Klipper CHT`, and inherit only from parents that live in vendors actually enabled in the user's Orca install (Custom or OrcaFilamentLibrary). This spec respects both rules. The branded filaments inherit from `Generic <material> @Stephen` (a User profile, always available), and re-state `compatible_printers` explicitly rather than relying on inheritance, to avoid surprises.
+
 ## Design
 
 ### 1. Custom process profile — `0.20mm Standard @Stephen`
@@ -86,6 +98,23 @@ File: `~/Library/Application Support/OrcaSlicer/user/default/filament/Generic PL
 | `filament_start_gcode` | `["SET_PRESSURE_ADVANCE ADVANCE=0.0475"]` | Default PA for generic PLA from user's tower history. |
 | `filament_max_volumetric_speed` | `21` | Matches PrusaSlicer setting; Revo HF can push this. |
 | `compatible_printers` | `["Stephen 0.4 Klipper CHT"]` | Restrict to user's printer. |
+| `filament_notes` | (see below) | Tracks which branded filaments have been towered against this profile. |
+
+**`filament_notes` content:**
+
+```
+Default for any PLA not in the list below.
+
+Towered, matches this generic (use this profile):
+- Overture Matte Black PLA — PA 0.0475
+- Elegoo PLA Pro Purple — PA 0.0455 (within rounding)
+
+Towered, has its own profile (use that instead):
+- 3D-HONGDAK Pink PLA — PA 0.03
+- Eryone Wood PLA — PA 0.035
+- Overture Matte Black ECO-PLA Older — PA 0.0375
+- Pro White PLA — PA 0.055
+```
 
 **Deliberately not set:** filament cost, filament colour. User does not want to maintain those.
 
@@ -103,6 +132,21 @@ File: `~/Library/Application Support/OrcaSlicer/user/default/filament/Generic PE
 | `filament_start_gcode` | `["SET_PRESSURE_ADVANCE ADVANCE=0.11"]` | Default PETG PA from user's tower history. |
 | `filament_max_volumetric_speed` | `21` | Matches PrusaSlicer setting. |
 | `compatible_printers` | `["Stephen 0.4 Klipper CHT"]` | Restrict to user's printer. |
+| `filament_notes` | (see below) | Tracks which branded filaments have been towered against this profile. |
+
+**`filament_notes` content:**
+
+```
+Default for any PETG not in the list below.
+
+Towered, matches this generic (use this profile):
+- AmazonBasics Orange PETG — PA 0.115 (within rounding)
+- Elegoo Rapid PETG @HF0.4 — PA 0.11
+- Polylite Blue PETG — PA 0.11
+
+Towered, has its own profile (use that instead):
+- Elegoo Black PETG — PA 0.0625 (outlier — re-tower to verify)
+```
 
 #### `Generic TPU @Stephen`
 
@@ -117,6 +161,19 @@ File: `~/Library/Application Support/OrcaSlicer/user/default/filament/Generic TP
 | `enable_pressure_advance` | `0` | Klipper owns PA. |
 | `filament_start_gcode` | `["; SET_PRESSURE_ADVANCE ADVANCE=0.05  ; uncomment after PA tower"]` | TPU PA not yet calibrated; placeholder line. |
 | `compatible_printers` | `["Stephen 0.4 Klipper CHT"]` | Restrict to user's printer. |
+| `filament_notes` | (see below) | Tracks which branded filaments have been towered against this profile. |
+
+**`filament_notes` content:**
+
+```
+Default for any TPU/FLEX not in the list below.
+
+Not yet towered (run a PA tower before trusting):
+- Generic FLEX
+- NinjaTek NinjaFlex TPU
+- Overture High Speed TPU
+- SainSmart TPU
+```
 
 Other TPU settings (slow speeds, conservative retraction, fan profile) inherit from the Orca system parent without changes.
 
@@ -189,7 +246,7 @@ Total: 9 new profiles (3 generic filaments + 5 branded filaments + 1 process), 1
 
 ## Validation plan
 
-1. Restart Orca; confirm all 9 new profiles appear in their respective dropdowns when `Stephen 0.4 Klipper CHT` is the selected printer.
+1. Restart Orca; confirm **all 9 new profiles** appear in their respective dropdowns when `Stephen 0.4 Klipper CHT` is the selected printer. If any profile is missing, the most likely cause is a parent that doesn't load — check that every `inherits` value resolves to either an OrcaFilamentLibrary system profile or a User profile we created in this spec, and that `compatible_printers` is set as an explicit list.
 2. With `Generic PLA @Stephen` selected, slice a small calibration cube. Confirm:
    - Emitted G-code contains `SET_PRESSURE_ADVANCE ADVANCE=0.0475` from `filament_start_gcode`.
    - No `M572` (PrusaSlicer linear advance) anywhere in the file.
