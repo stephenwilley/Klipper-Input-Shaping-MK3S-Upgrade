@@ -1,7 +1,7 @@
 # OrcaSlicer PLA/PETG/TPU profile setup for Mk3 + Revo HF + Klipper
 
 Date: 2026-04-23
-Status: Design awaiting user review
+Status: Implemented 2026-04-23, with three follow-up additions made during verification — see "Post-implementation additions" below.
 
 ## Context
 
@@ -256,6 +256,47 @@ Total: 9 new profiles (3 generic filaments + 5 branded filaments + 1 process), 1
 4. Print a small test part in PLA at the new speeds. Compare visual quality against the same part sliced in PrusaSlicer. Outer-wall ringing should be absent or significantly reduced versus stock MyKlipper.
 5. Print a small test part in PETG, confirm bed adhesion at the inherited HF temperatures and that PA value tracks.
 6. Repeat with one branded variant (e.g. `Pro White PLA @Stephen`) to confirm inheritance chain delivers the brand-specific PA value.
+
+## Post-implementation additions
+
+After verification of the PLA slice output but before the physical print test, three small changes were made to clean up naming inconsistencies and add TPU process support that was missing from the original spec:
+
+**1. ASA profile renames.** The two ASA profiles created in the prior spec (`2026-04-22-orca-asa-profiles-design.md`) used noisier suffixes than the new convention:
+
+- `Polymaker Polylite ASA @Stephen MK4IS HF0.4` → `Polymaker Polylite ASA @Stephen`
+- `0.20mm Structural ASA @Stephen 0.4 Klipper CHT` → `0.20mm Structural ASA @Stephen`
+
+Each rename was: `mv` for the `.json` and `.info` sidecar, then update the `name` field inside the JSON. No inheritance chain referenced the old names, so nothing else needed updating.
+
+**2. `filename_format` override on every custom process.** The MyKlipper parent inherits `fdm_process_common`'s default of `{input_filename_base}_{layer_height}mm_{filament_type[initial_tool]}_{printer_model}_{print_time}.gcode`, which puts `MK4IS` in every output filename. Since the user's printer is a Mk3 chassis pretending to be an MK4IS only for parent-profile compatibility, the embedded `MK4IS` is misleading. Applied to all three custom processes:
+
+```
+"filename_format": "{input_filename_base}_{layer_height}mm_{filament_type[initial_tool]}_{print_time}.gcode"
+```
+
+**3. `0.20mm Flex @Stephen` process for TPU.** TPU on a direct-drive setup needs much lower acceleration than PLA/PETG — the soft filament physically can't follow quick direction changes and produces blobs/pulling at every corner. The filament profile alone does not address this because acceleration lives in the process profile. Created a TPU-specific process inheriting from `0.20mm Standard @MyKlipper`:
+
+| Field | Value |
+|---|---|
+| `outer_wall_speed` | 30 |
+| `inner_wall_speed` | 50 |
+| `internal_solid_infill_speed` | 50 |
+| `top_surface_speed` | 25 |
+| `sparse_infill_speed` | 50 |
+| `gap_infill_speed` | 25 |
+| `initial_layer_speed` | 20 |
+| `initial_layer_infill_speed` | 30 |
+| `travel_speed` | 150 |
+| `default_acceleration` | 1000 |
+| `outer_wall_acceleration` | 800 |
+| `inner_wall_acceleration` | 1000 |
+| `internal_solid_infill_acceleration` | 1000 |
+| `top_surface_acceleration` | 800 |
+| `initial_layer_acceleration` | 500 |
+| `travel_acceleration` | 1500 |
+| `z_hop` | `["0"]` (overrides printer profile's 0.2 — TPU strings on hops) |
+
+Lower travel speed (150 vs 250) reduces stringing on flexible materials. `compatible_printers` and `filename_format` follow the same convention as the other custom processes.
 
 ## Follow-up / later work (out of scope)
 
